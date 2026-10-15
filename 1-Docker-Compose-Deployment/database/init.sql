@@ -1,0 +1,15 @@
+USE school;
+
+CREATE TABLE IF NOT EXISTS student (
+    id INT NOT NULL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    roll_number INT NOT NULL,
+    class VARCHAR(100)
+);
+
+CREATE TABLE IF NOT EXISTS teacher (
+    id INT NOT NULL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    subject VARCHAR(100) NOT NULL,
+    class VARCHAR(100)
+);

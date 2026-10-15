@@ -1,0 +1,8 @@
+# Identifiants locaux Kubernetes
+/k8s-local/mysql-secret.yaml
+
+# Configuration locale Docker Compose
+/1-Docker-Compose-Deployment/.env
+
+# Ancienne image conservee localement
+/1-Docker-Compose-Deployment/frontend/src/assets/Student-old.jpg
