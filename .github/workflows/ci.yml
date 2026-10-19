@@ -1,3 +1,58 @@
+name: Docker CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Build backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build backend image
+        run: |
+          docker build \
+            -t three-tier-backend:ci \
+            ./1-Docker-Compose-Deployment/backend
+
+      - name: Check backend JavaScript syntax
+        run: |
+          docker run --rm \
+            --entrypoint node \
+            three-tier-backend:ci \
+            --check server.js
+
+  frontend:
+    name: Build frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build frontend image for Kubernetes
+        run: |
+          docker build \
+            -t three-tier-frontend:ci \
+            -f ./1-Docker-Compose-Deployment/frontend/Dockerfile.k8s \
+            ./1-Docker-Compose-Deployment/frontend
+
   publish:
     name: Publish Docker images
     needs: [backend, frontend]
