@@ -1,54 +1,47 @@
-name: Docker CI
-
-on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-jobs:
-  backend:
-    name: Build backend
+  publish:
+    name: Publish Docker images
+    needs: [backend, frontend]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      BACKEND_IMAGE: ghcr.io/elouafi11004/three-tier-backend
+      FRONTEND_IMAGE: ghcr.io/elouafi11004/three-tier-frontend
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      - name: Login to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" |
+            docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
       - name: Build backend image
         run: |
           docker build \
-            -t three-tier-backend:ci \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            -t "$BACKEND_IMAGE:sha-$GITHUB_SHA" \
             ./1-Docker-Compose-Deployment/backend
 
-      - name: Check backend JavaScript syntax
-        run: |
-          docker run --rm \
-            --entrypoint node \
-            three-tier-backend:ci \
-            --check server.js
-
-  frontend:
-    name: Build frontend
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Build frontend image for Kubernetes
+      - name: Build frontend image
         run: |
           docker build \
-            -t three-tier-frontend:ci \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            -t "$FRONTEND_IMAGE:sha-$GITHUB_SHA" \
             -f ./1-Docker-Compose-Deployment/frontend/Dockerfile.k8s \
             ./1-Docker-Compose-Deployment/frontend
+
+      - name: Push images
+        run: |
+          docker push "$BACKEND_IMAGE:sha-$GITHUB_SHA"
+          docker push "$FRONTEND_IMAGE:sha-$GITHUB_SHA"
