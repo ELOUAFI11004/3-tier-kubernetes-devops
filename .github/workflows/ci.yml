@@ -100,3 +100,78 @@ jobs:
         run: |
           docker push "$BACKEND_IMAGE:sha-$GITHUB_SHA"
           docker push "$FRONTEND_IMAGE:sha-$GITHUB_SHA"
+
+  update-manifests:
+    name: Update Kubernetes manifests
+    needs: publish
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+
+      - name: Update image tags and push
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch origin main
+
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "Main has changed. Leaving deployment to the newer workflow."
+            exit 0
+          fi
+
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          tag = "sha-" + os.environ["GITHUB_SHA"]
+
+          for component in ("backend", "frontend"):
+              path = Path(f"k8s-local/{component}.yaml")
+              image = f"ghcr.io/elouafi11004/three-tier-{component}"
+              content = path.read_text(encoding="utf-8")
+
+              pattern = (
+                  r"(?m)^([ \t]*image:[ \t]*)"
+                  + re.escape(image)
+                  + r":[^\s]+[ \t]*$"
+              )
+
+              updated, count = re.subn(
+                  pattern,
+                  lambda match: match.group(1) + image + ":" + tag,
+                  content,
+              )
+
+              if count != 1:
+                  raise SystemExit(
+                      f"Expected exactly one image reference in {path}, found {count}"
+                  )
+
+              path.write_text(updated, encoding="utf-8")
+          PY
+
+          git diff --check
+          git add k8s-local/backend.yaml k8s-local/frontend.yaml
+
+          if git diff --cached --quiet; then
+            echo "Image tags are already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "Deploy images sha-$GITHUB_SHA"
+          git push origin HEAD:main
