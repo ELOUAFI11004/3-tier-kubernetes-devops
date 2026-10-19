@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ghcr.io/elouafi11004/three-tier-frontend:sha-e62fe0630bd9c8c519c0540ff8d95dcb76e048d7
+          image: ghcr.io/elouafi11004/three-tier-frontend:sha-25f33561fa6cb970a1caadbdd6084d196120896f
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
