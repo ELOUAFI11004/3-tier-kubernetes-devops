@@ -1,87 +1,54 @@
-name: Node.js CI
+name: Docker CI
 
 on:
   push:
-    branches: [ "main" ]
-    paths:
-      - '3-tier-project/**'
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    services:
-      mysql:
-        image: mysql:8.0
-        ports:
-          - 3306:3306
-        env:
-          MYSQL_ROOT_PASSWORD: rootpassword123
-          MYSQL_DATABASE: school
-          MYSQL_USER: school_user
-          MYSQL_PASSWORD: password123
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost -uroot -prootpassword123"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+  backend:
+    name: Build backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/checkout@v6
         with:
-          node-version: '21'
+          persist-credentials: false
 
-      - name: Install front-end dependencies
+      - name: Build backend image
         run: |
-          cd 3-tier-project/frontend
-          npm install
+          docker build \
+            -t three-tier-backend:ci \
+            ./1-Docker-Compose-Deployment/backend
 
-      - name: Install back-end dependencies
+      - name: Check backend JavaScript syntax
         run: |
-          cd 3-tier-project/backend
-          npm install
+          docker run --rm \
+            --entrypoint node \
+            three-tier-backend:ci \
+            --check server.js
 
-      - name: Frontend build check
-        run: |
-          cd 3-tier-project/frontend
-          CI=false npm run build
+  frontend:
+    name: Build frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
-
-      - name: Wait for MySQL to be ready
-        run: |
-          for i in {1..30}; do
-            if mysql -h 127.0.0.1 -uschool_user -ppassword123 -e "SELECT 1" &>/dev/null; then
-              echo "MySQL is ready!"
-              break
-            fi
-            echo "Waiting for MySQL..."
-            sleep 2
-          done
-
-      - name: Backend build check
-        run: |
-          cd 3-tier-project/backend
-          npm test || echo "Tests failed, but continuing..."
-
-                  
-        env:
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_USER: school_user
-          DB_PASSWORD: password123
-          DB_NAME: school
-
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v6
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
-          args: >
-            -Dsonar.projectKey=yahyaelkhayat_3-tier-analysis
-            -Dsonar.organization=yahyaelkhayat
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
-          projectBaseDir: ./3-tier-project
+          persist-credentials: false
+
+      - name: Build frontend image for Kubernetes
+        run: |
+          docker build \
+            -t three-tier-frontend:ci \
+            -f ./1-Docker-Compose-Deployment/frontend/Dockerfile.k8s \
+            ./1-Docker-Compose-Deployment/frontend
